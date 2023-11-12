@@ -2,11 +2,12 @@ import cv2
 import mediapipe as mp
 import pyvirtualcam
 import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib import animation
 
 mp_drawing = mp.solutions.drawing_utils
 
 cap = cv2.VideoCapture(0)  # depends on input device, usually 0
-
 
 def get_coords(point, im):
     x = int(im.shape[1] * point.x)
@@ -34,7 +35,7 @@ def add_outline(face, im):
     right_eye_landmarks = [(int(landmark.x * img_width), int(landmark.y * img_height)) for landmark in right_eye_landmarks]
     left_eye_np = np.array(left_eye_landmarks)
     right_eye_np = np.array(right_eye_landmarks)
-
+    
     eye_fill_mask = np.zeros_like(im, dtype=np.uint8)
     eye_outline_mask = np.zeros_like(im, dtype=np.uint8)
     cv2.fillPoly(eye_fill_mask, [left_eye_np], (0, 255, 0))
@@ -49,6 +50,33 @@ def add_outline(face, im):
     im[outline_mask] = eye_outline_mask[outline_mask]
 
     return im
+
+
+def get_dist(pts):
+    x1, y1 = pts[0]
+    x2, y2 = pts[1]
+    return np.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2)
+
+
+def get_ratio(face, im):
+    img_height, img_width = im.shape[:2]
+    left_hor_indices = [33, 133]
+    left_vert_indices = [145, 159]
+    right_hor_indices = [263, 362]
+    right_vert_indices = [374, 386]
+    left_hor_landmarks = [face[i] for i in left_hor_indices]
+    left_vert_landmarks = [face[i] for i in left_vert_indices]
+    right_hor_landmarks = [face[i] for i in right_hor_indices]
+    right_vert_landmarks = [face[i] for i in right_vert_indices]
+    left_hor_landmarks = [(int(landmark.x * img_width), int(landmark.y * img_height)) for landmark in left_hor_landmarks]
+    left_vert_landmarks = [(int(landmark.x * img_width), int(landmark.y * img_height)) for landmark in left_vert_landmarks]
+    right_hor_landmarks = [(int(landmark.x * img_width), int(landmark.y * img_height)) for landmark in right_hor_landmarks]
+    right_vert_landmarks = [(int(landmark.x * img_width), int(landmark.y * img_height)) for landmark in right_vert_landmarks]
+    left_hor_dist = get_dist(left_hor_landmarks)
+    left_vert_dist = get_dist(left_vert_landmarks)
+    right_hor_dist = get_dist(right_hor_landmarks)
+    right_vert_dist = get_dist(right_vert_landmarks)
+    return ((left_hor_dist / left_vert_dist) + (right_hor_dist / right_vert_dist)) / 2
 
 
 def draw(face, im):
@@ -87,11 +115,17 @@ def create_virtual_cam():
         with pyvirtualcam.Camera(
             width=frame1.shape[1], height=frame1.shape[0], fps=20
         ) as cam:
+            ratios = []
+            frame_num = 0
+            frames = []
+
             while cap.isOpened():
                 success, image = cap.read()
                 if not success:
                     print("Error reading camera frame")
                     break
+                frame_num += 1
+                frames.append(frame_num)
 
                 # To improve performance, optionally mark the image as not writeable
                 # to pass by reference
@@ -103,8 +137,15 @@ def create_virtual_cam():
                 if results.multi_face_landmarks:
                     for face_landmarks in results.multi_face_landmarks:
                         face = face_landmarks.landmark
-                        # draw(face, image)
-                        image = add_outline(face, image)
+                        ratio = get_ratio(face, image)
+                        ratios.append(get_ratio(face, image))
+                        if ratio > 5: # This number may need to be tuned for each user or intelligently set and not just hard-coded
+                            image = cv2.flip(image, 1)
+                            cv2.putText(image, 'Blink', (image.shape[0]//2, 100), cv2.FONT_HERSHEY_COMPLEX, 1.7, (0, 0, 255), 2)
+                            image = cv2.flip(image, 1)
+                        else:
+                            draw(face, image)
+                            # image = add_outline(face, image)
 
                         # mp_drawing.draw_landmarks(
                         #     image=image,
@@ -125,6 +166,19 @@ def create_virtual_cam():
                     break
 
     cap.release()
+    cv2.destroyAllWindows()
+
+    # blink_inds = []
+    # n_stds = 2
+    # for i in range(30, len(ratios)):
+    #     if np.mean(ratios[i-30:i]) + (n_stds * np.std(ratios[i-30:i])) < ratios[i]:
+    #         blink_inds.append(i)
+
+    # plt.figure()
+    # plt.gca().set(title='Eye Ratio over Time', xlabel='Frame Number', ylabel='Ratio of Eye Height to Width', xlim=[0, len(ratios)-1])
+    # plt.plot(ratios)
+    # plt.vlines(blink_inds, 0, np.max(ratios), colors='r', linestyles='dashed')
+    # plt.show()
 
 
 if __name__ == "__main__":
