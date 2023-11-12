@@ -66,12 +66,12 @@ def create_virtual_cam():
                 # To improve performance, optionally mark the image as not writeable
                 # to pass by reference
                 image.flags.writeable = False
-                image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+                # image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
                 results = face_mesh.process(image)
 
                 # Draw the face mesh annotations on the image
                 image.flags.writeable = True
-                image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+                # image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
                 if results.multi_face_landmarks:
                     for face_landmarks in results.multi_face_landmarks:
                         face = face_landmarks.landmark
@@ -85,12 +85,14 @@ def create_virtual_cam():
                         #     connection_drawing_spec=mp.solutions.drawing_styles.get_default_face_mesh_iris_connections_style(),
                         # )
 
-                        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+                        # image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
                         cam.send(image)
                         cam.sleep_until_next_frame()
 
                 cv2.imshow("Face", cv2.flip(image, 1))  # selfie flip
                 if cv2.waitKey(1) & 0xFF == ord("q"):
+                    break
+                if cv2.getWindowProperty("Face", cv2.WND_PROP_VISIBLE) < 1:
                     break
 
     cap.release()
